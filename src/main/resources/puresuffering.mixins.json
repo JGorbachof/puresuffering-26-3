@@ -1,0 +1,27 @@
+{
+  "required": true,
+  "package": "dev.theagameplayer.puresuffering.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "LevelMixin",
+    "MappedRegistryMixin",
+    "MobMixin",
+    "SensorMixin",
+    "VillagerMixin",
+    "WitherBossMixin"
+  ],
+  "client": [
+    "ClientLevelMixin",
+    "DimensionSpecialEffectsMixin",
+    "LevelRendererMixin",
+    "LightTextureMixin",
+    "SkyRenderStateMixin"
+  ],
+  "server": [
+    "DedicatedServerPropertiesMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "minVersion": "0.8.5"
+}

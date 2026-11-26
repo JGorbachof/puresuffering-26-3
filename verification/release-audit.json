@@ -1,0 +1,242 @@
+{
+  "source_checks": [
+    {
+      "owner": "net.minecraft.world.level.Level",
+      "member": "skyDarken",
+      "source_match": "private int skyDarken;"
+    },
+    {
+      "owner": "net.minecraft.client.sounds.SoundManager",
+      "member": "registry",
+      "source_match": "private final Map<Identifier, WeighedSoundEvents> registry = Maps.newHashMap();"
+    },
+    {
+      "owner": "net.minecraft.client.sounds.SoundManager",
+      "member": "soundEngine",
+      "source_match": "private final SoundEngine soundEngine;"
+    },
+    {
+      "owner": "net.minecraft.client.sounds.SoundEngine",
+      "member": "instanceBySource",
+      "source_match": "private final Multimap<SoundSource, SoundInstance> instanceBySource = HashMultimap.create();"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.Brain",
+      "member": "availableBehaviorsByPriority",
+      "source_match": "private final Map<Integer, Map<Activity, Set<BehaviorControl<? super E>>>> availableBehaviorsByPriority = Maps.newTreeMap();"
+    },
+    {
+      "owner": "com.mojang.blaze3d.audio.Channel",
+      "member": "source",
+      "source_match": "private final int source;"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.navigation.PathNavigation",
+      "member": "mob",
+      "source_match": "protected final Mob mob;"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.navigation.PathNavigation",
+      "member": "level",
+      "source_match": "protected final Level level;"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.navigation.PathNavigation",
+      "member": "path",
+      "source_match": "protected @Nullable Path path;"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.navigation.PathNavigation",
+      "member": "targetPos",
+      "source_match": "private @Nullable BlockPos targetPos;"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.navigation.PathNavigation",
+      "member": "pathFinder",
+      "source_match": "private final PathFinder pathFinder;"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.navigation.PathNavigation",
+      "member": "maxVisitedNodesMultiplier",
+      "source_match": "private float maxVisitedNodesMultiplier = 1.0F;"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.navigation.PathNavigation",
+      "member": "reachRange",
+      "source_match": "private int reachRange;"
+    },
+    {
+      "owner": "net.minecraft.world.level.ServerExplosion",
+      "member": "fire",
+      "source_match": "private final boolean fire;"
+    },
+    {
+      "owner": "net.minecraft.world.level.ServerExplosion",
+      "member": "blockInteraction",
+      "source_match": "private final Explosion.BlockInteraction blockInteraction;"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.navigation.PathNavigation",
+      "member": "resetStuckTimeout()V",
+      "source_match": "private void resetStuckTimeout() {"
+    },
+    {
+      "owner": "net.minecraft.client.renderer.SkyRenderer",
+      "member": "extractRenderState",
+      "source_match": "public void extractRenderState(ClientLevel level, float partialTicks, Camera camera, SkyRenderState state) {"
+    },
+    {
+      "owner": "net.minecraft.client.renderer.SkyRenderer",
+      "member": "render",
+      "source_match": "public void render(GpuBufferSlice skyFog, SkyRenderState state) {"
+    },
+    {
+      "owner": "net.minecraft.client.renderer.SkyRenderer",
+      "member": "renderSun",
+      "source_match": "private void renderSun(RenderPass renderPass, float rainBrightness, PoseStack poseStack) {"
+    },
+    {
+      "owner": "net.minecraft.client.renderer.SkyRenderer",
+      "member": "renderMoon",
+      "source_match": "private void renderMoon(RenderPass renderPass, MoonPhase moonPhase, float rainBrightness, PoseStack poseStack) {"
+    },
+    {
+      "owner": "net.minecraft.client.renderer.SkyRenderer",
+      "member": "renderEndSky",
+      "source_match": "private void renderEndSky(RenderPass renderPass) {"
+    },
+    {
+      "owner": "net.minecraft.client.renderer.SkyRenderer",
+      "member": "close",
+      "source_match": "public void close() {"
+    },
+    {
+      "owner": "net.minecraft.client.renderer.SkyRenderer",
+      "member": "applyCelestialBodyTransform",
+      "source_match": "private Matrix4f applyCelestialBodyTransform(PoseStack poseStack, float height, float scale) {"
+    },
+    {
+      "owner": "net.minecraft.client.renderer.LightmapRenderStateExtractor",
+      "member": "extract",
+      "source_match": "public void extract(LightmapRenderState renderState, float partialTicks) {"
+    },
+    {
+      "owner": "net.minecraft.client.renderer.LightmapRenderStateExtractor",
+      "member": "calculateDarknessScale",
+      "source_match": "private float calculateDarknessScale(LivingEntity camera, float darknessGamma, float partialTickTime) {"
+    },
+    {
+      "owner": "net.minecraft.client.multiplayer.ClientLevel",
+      "member": "disconnect",
+      "source_match": "public void disconnect(Component message) {"
+    },
+    {
+      "owner": "net.minecraft.world.entity.npc.villager.Villager",
+      "member": "registerBrainGoals",
+      "source_match": "private void registerBrainGoals(Brain<Villager> brain) {"
+    },
+    {
+      "owner": "net.minecraft.world.entity.boss.wither.WitherBoss",
+      "member": "checkDespawn",
+      "source_match": "public void checkDespawn() {"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.sensing.Sensor",
+      "member": "isEntityAttackable",
+      "source_match": "public static boolean isEntityAttackable(ServerLevel level, LivingEntity body, LivingEntity target) {"
+    },
+    {
+      "owner": "net.minecraft.world.entity.ai.sensing.Sensor",
+      "member": "isEntityAttackableIgnoringLineOfSight",
+      "source_match": "public static boolean isEntityAttackableIgnoringLineOfSight(ServerLevel level, LivingEntity body, LivingEntity target) {"
+    },
+    {
+      "owner": "net.minecraft.world.level.Level",
+      "member": "updateSkyBrightness",
+      "source_match": "public void updateSkyBrightness() {"
+    },
+    {
+      "owner": "net.minecraft.world.entity.Mob",
+      "member": "addAdditionalSaveData",
+      "source_match": "protected void addAdditionalSaveData(ValueOutput output) {"
+    },
+    {
+      "owner": "net.minecraft.world.entity.Mob",
+      "member": "readAdditionalSaveData",
+      "source_match": "protected void readAdditionalSaveData(ValueInput input) {"
+    },
+    {
+      "owner": "net.minecraft.core.MappedRegistry",
+      "member": "register",
+      "source_match": "public Holder.Reference<T> register(ResourceKey<T> key, T value, RegistrationInfo registrationInfo) {"
+    }
+  ],
+  "assets": [
+    {
+      "path": "src/main/resources/assets/puresuffering/sounds/cancel_invasion.ogg",
+      "introduced": "f71a95d7d9320f37b280e1cc53b9111e280eb7f8 TheAGamePlayer",
+      "sha256": "72eaab787b9bac46b1b125c4452923488fba7e2aaa5bb11c98bc91da1c141164"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/sounds/default_invasion_start.ogg",
+      "introduced": "fe1358e6b6911c47b0d973f9ba5942af911ba7b1 TheAGamePlayer",
+      "sha256": "092c8ddfc52b22432c7a16a10a520735134f88ba5ec1b282725bfe95c320d437"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/sounds/hyper_invasion_start.ogg",
+      "introduced": "fe1358e6b6911c47b0d973f9ba5942af911ba7b1 TheAGamePlayer",
+      "sha256": "f5359ae19cb91c0cdc23ad42f8c7b177310faa6cd52fd44492368c8e0d66bce6"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/sounds/inform_invasion.ogg",
+      "introduced": "a84642566e6da4be252d3360f75b4637f0933640 TheAGamePlayer",
+      "sha256": "9fee7b99af66cb533c3152b7758540f17efe14cd29ff9caa1247082b3d2e63e0"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/sounds/invasion_ambience.ogg",
+      "introduced": "a84642566e6da4be252d3360f75b4637f0933640 TheAGamePlayer",
+      "sha256": "7eef5272fdb50b20949c762d70c3a4dffdd41df5a9ebb5cf9e8dbfbf71c00d5a"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/sounds/nightmare_invasion_start.ogg",
+      "introduced": "fe1358e6b6911c47b0d973f9ba5942af911ba7b1 TheAGamePlayer",
+      "sha256": "e84db7a48316c40cc12c7ee209d1f07ce0305761071a8eee1a28bb428c77a938"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/textures/entity/charged_armor1.png",
+      "introduced": "4f79228efe00a2137078ccaa9b68cf7671f1f6f9 TheAGamePlayer",
+      "sha256": "47b7e8c815f336624401889aec107f4f51d7cbe118337eff2b914354bc5dd72a"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/textures/entity/charged_armor2.png",
+      "introduced": "4f79228efe00a2137078ccaa9b68cf7671f1f6f9 TheAGamePlayer",
+      "sha256": "0ce81cf390b9e536ecb2b05ac3d38cf78e3d81ed5aaba1789af2b453620aa85b"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/textures/environment/end_game_sky.png",
+      "introduced": "fe1358e6b6911c47b0d973f9ba5942af911ba7b1 TheAGamePlayer",
+      "sha256": "41065b34813a1a61b63e021dff1ea9a2e2f1e4fca110df2c1ca2e5212707fa20"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/textures/environment/lunar_eclipse_moon.png",
+      "introduced": "266924d0ad753d90470c6840c151a2454d72a04e TheAGamePlayer",
+      "sha256": "ea3b9c9409839a574b570c9ff8289a44d95ad15117cf9708b0f05bd73a0b8d74"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/textures/environment/solar_eclipse_sun.png",
+      "introduced": "a948c3dd722b3d7fa2b8467571105789db505161 TheAGamePlayer",
+      "sha256": "f950427b044b487a4c63a1c216e2f89a232f820fb7ea44a124cc631717d45d50"
+    },
+    {
+      "path": "src/main/resources/assets/puresuffering/textures/mob_effect/blessing.png",
+      "introduced": "a948c3dd722b3d7fa2b8467571105789db505161 TheAGamePlayer",
+      "sha256": "5e5e67870bfa64b6a79d5c366d2e23ee6a839b2501c55a777338e15d8f8c03ed"
+    },
+    {
+      "path": "src/main/resources/puresuffering.png",
+      "introduced": "266924d0ad753d90470c6840c151a2454d72a04e TheAGamePlayer",
+      "sha256": "af792fbbb2a483b5237fbfd5e25d739530b828bc3cbcd1bb7618b9056d198b07"
+    }
+  ],
+  "scope": "Target-source member/signature review; not live client mixin application or independent underlying asset rights verification"
+}

@@ -1,0 +1,20 @@
+package dev.theagameplayer.puresuffering.registries.other;
+
+import dev.theagameplayer.puresuffering.data.InvasionTypeManager;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
+
+public final class PSReloadListeners {
+	private static InvasionTypeManager invasionTypeManager;
+
+	public static final void addReloadListeners(final AddServerReloadListenersEvent pEvent) {
+		final var registryAccess = pEvent.getServerResources().getRegistryLookup();
+		invasionTypeManager = new InvasionTypeManager(registryAccess.lookupOrThrow(Registries.LEVEL_STEM), registryAccess.lookupOrThrow(Registries.BIOME));
+		pEvent.addListener(dev.theagameplayer.puresuffering.PureSufferingMod.namespace("invasion_types"),invasionTypeManager);
+	}
+
+	public static final InvasionTypeManager getInvasionTypeManager() {
+		return invasionTypeManager;
+	}
+}

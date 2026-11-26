@@ -1,0 +1,586 @@
+package dev.theagameplayer.puresuffering.invasion;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import com.google.common.collect.ImmutableSet;
+
+import dev.theagameplayer.puresuffering.PureSufferingMod;
+import dev.theagameplayer.puresuffering.config.PSConfigValues;
+import dev.theagameplayer.puresuffering.invasion.InvasionType.SeverityInfo;
+import dev.theagameplayer.puresuffering.invasion.InvasionType.SpawningSystem;
+import dev.theagameplayer.puresuffering.invasion.data.AdditionalEntitySpawnData;
+import dev.theagameplayer.puresuffering.invasion.data.InvasionSpawnerData;
+import dev.theagameplayer.puresuffering.invasion.data.InvasionSpawnerData.MobTagData;
+import dev.theagameplayer.puresuffering.network.InvasionMobParticlesPacket;
+import dev.theagameplayer.puresuffering.registries.other.PSGameRules;
+import dev.theagameplayer.puresuffering.registries.other.PSPackets;
+import dev.theagameplayer.puresuffering.registries.other.PSReloadListeners;
+import dev.theagameplayer.puresuffering.util.list.SpawnPosChart;
+import dev.theagameplayer.puresuffering.world.entity.PSInvasionMob;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.entity.SpawnPlacements;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.util.random.WeightedList;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.Identifier;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.PathNavigationRegion;
+import net.minecraft.world.level.SpawnData;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.level.pathfinder.PathComputationType;
+import net.neoforged.neoforge.event.EventHooks;
+import net.minecraft.server.level.ServerLevel;
+
+public final class Invasion implements InvasionTypeHolder {
+	public static final int TRANSITION_TIME = 600;
+	public static final int HALF_TRANSITION = TRANSITION_TIME/2;
+	public static final String INVASION_MOB = PureSufferingMod.MODID.toUpperCase() + "InvasionMob";
+	public static final String ANTI_GRIEF = PureSufferingMod.MODID.toUpperCase() + "AntiGrief";
+	public static final String DESPAWN_LOGIC = PureSufferingMod.MODID.toUpperCase() + "DespawnLogic";
+	private final ArrayList<MobInfo> invasionMobs;
+	private final InvasionType invasionType;
+	private final boolean isPrimary;
+	private final int severity, mobCap;
+	private final boolean shouldTick;
+	private final boolean isNatural;
+	private final long startTime;
+	private final int index;
+	private final InvasionDifficulty difficulty;
+	private final WeightedList<SpawnData> spawnPotentials = WeightedList.of();
+	private SpawnData nextSpawnData = new SpawnData();
+	private int spawnDelay;
+	public int mobsKilledByPlayer;
+
+	public Invasion(final ServerLevel pLevel, final InvasionType pInvasionType, final int pSeverity, final boolean pIsPrimary, final boolean pIsNatural, final long pStartTime, final int pIndex, final InvasionDifficulty pDifficulty) {
+		final SeverityInfo info = pInvasionType.getSeverityInfo().get(pSeverity);
+		final int pMobCap = Math.max(0, pIsPrimary ? PSGameRules.PRIMARY_INVASION_MOB_CAP.get(pLevel) : PSGameRules.SECONDARY_INVASION_MOB_CAP.get(pLevel));
+		final int mobCap = info.getFixedMobCap() > 0 ? Mth.clamp(info.getFixedMobCap(), 0, pMobCap) : pMobCap;
+		this.invasionMobs = new ArrayList<>(Math.min(mobCap,256));
+		this.invasionType = pInvasionType;
+		this.isPrimary = pIsPrimary;
+		this.severity = pSeverity;
+		this.mobCap = (int)(mobCap * info.getMobCapPercentage());
+		this.shouldTick = info.getTickDelay() > -1 && (info.getMobSpawnList() != null || pInvasionType.getSpawningSystem() != SpawningSystem.DEFAULT);
+		this.isNatural = pIsNatural;
+		this.startTime = pStartTime;
+		this.index = pIndex;
+		this.difficulty = pDifficulty;
+	}
+
+	@Override
+	public final InvasionType getType() {
+		return this.invasionType;
+	}
+
+	public final boolean isPrimary() {
+		return this.isPrimary;
+	}
+
+	public final int getSeverity() {
+		return this.severity;
+	}
+
+	public final int getMobCap() {
+		return this.mobCap;
+	}
+
+	public final SeverityInfo getSeverityInfo() {
+		return this.invasionType.getSeverityInfo().get(this.severity);
+	}
+
+	public final void replaceMob(final Mob pMob, final int pIndex) {
+		final MobInfo info = this.invasionMobs.get(pIndex);
+		info.uuid = pMob.getUUID();
+	}
+
+	public final void splitMob(final List<Mob> pChildren) {
+		for (final Mob child : pChildren)
+			this.invasionMobs.add(new MobInfo(child.getUUID(), false));
+	}
+
+	public final void relocateMob(final int pIndex) {
+		final MobInfo info = this.invasionMobs.get(pIndex);
+		info.relocate = true;
+	}
+
+	public final int hasMob(final Mob pMob) {
+		final UUID uuid = pMob.getUUID();
+		for (int i = 0; i < this.invasionMobs.size(); ++i) {
+			final MobInfo info = this.invasionMobs.get(i);
+			if (uuid.equals(info.uuid)) return i;
+		}
+		return -1;
+	}
+
+	public final boolean hasSameInvasion(final Mob pMob) {
+		final CompoundTag persistentData = pMob.getPersistentData();
+		return persistentData.contains(INVASION_MOB) && persistentData.getIntOr(INVASION_MOB,0) == this.toExtendedString().hashCode();
+	}
+
+	public final boolean loadMob(final Mob pMob) {
+		final CompoundTag persistentData = pMob.getPersistentData();
+		if (this.hasMob(pMob) >= 0) return true;
+        if (this.invasionMobs.size() < this.mobCap && persistentData.contains(INVASION_MOB) && persistentData.getIntOr(INVASION_MOB,0) == this.toExtendedString().hashCode()) {
+			this.invasionMobs.add(new MobInfo(pMob.getUUID(), false));
+			return true;
+		}
+		return false;
+	}
+
+	public final void tick(final ServerLevel pLevel, final int pTotalInvasions) {
+		final ServerPlayer[] players = pLevel.players().stream().filter(player -> !player.isSpectator()).toArray(ServerPlayer[]::new);
+		//Mob Relocation
+		this.invasionMobs.removeIf(info -> {
+			final Entity mob = pLevel.getEntity(info.uuid);
+			if (info.relocate && mob != null) {
+				if (players.length == 0) return mob == null || !mob.isAlive();
+				final ServerPlayer player = players[pLevel.getRandom().nextInt(players.length)];
+				final ChunkPos chunkPos = this.getSpawnChunk(pLevel, player);
+				final BlockPos spawnPos = this.getMobRelocatePos(pLevel, chunkPos, player, mob);
+				if (mob != null && this.isValidLocation(pLevel, mob.getType(), spawnPos, mob.getPersistentData().contains(ANTI_GRIEF) && mob.getPersistentData().getBooleanOr(ANTI_GRIEF,false))) {
+					PSPackets.sendToClientsIn(new InvasionMobParticlesPacket(this.difficulty, mob.position(), false), pLevel);
+					mob.snapTo(spawnPos.getX(), spawnPos.getY(), spawnPos.getZ(), mob.getYRot(), mob.getXRot());
+					if (!mob.isInWall()) {
+						PSPackets.sendToClientsIn(new InvasionMobParticlesPacket(this.difficulty, mob.position(), true), pLevel);
+						mob.getPersistentData().getIntArray(DESPAWN_LOGIC).filter(a -> a.length >= 4).ifPresent(a -> { a[3]=0; mob.getPersistentData().putIntArray(DESPAWN_LOGIC,a); }); //Prevents mobs from speeding around the map needlessly.
+					}
+					info.relocate = false;
+				}
+			}
+			return mob == null || !mob.isAlive();
+		});
+		//Spawn Mobs
+		if (this.shouldTick && this.invasionMobs.size() < this.mobCap)
+			this.tickMobSpawn(pLevel, players, pTotalInvasions);
+		//Spawn Additional Entities
+		final AdditionalEntitySpawnData[] additionalEntities = this.getSeverityInfo().getAdditionalEntities();
+		if (additionalEntities.length > 0) {
+			final AdditionalEntitySpawnData spawnInfo = additionalEntities[pLevel.getRandom().nextInt(additionalEntities.length)];
+			if (players.length == 0) return;
+			final int t = pLevel.getRandom().nextInt(spawnInfo.getChance()) == 0 ? pLevel.getRandom().nextIntBetweenInclusive(spawnInfo.getMinCount(), spawnInfo.getMaxCount()) : 0;
+			if (t < 1) return;
+			final ServerPlayer player = players[pLevel.getRandom().nextInt(players.length)];
+			final ChunkPos chunkPos = this.getSpawnChunk(pLevel, player);
+			for (int c = 0; c < t; ++c)
+				this.spawnAdditionalEntity(this.getEntitySpawnPos(pLevel, chunkPos, player, spawnInfo.getEntityType(), spawnInfo.isSurfaceSpawn()), pLevel, spawnInfo.getEntityType());
+		}
+	}
+
+	private final void tickMobSpawn(final ServerLevel pLevel, final ServerPlayer[] pPlayers, final int pTotalInvasions) {
+		//Delay check
+		if (this.spawnDelay < 0)
+			this.delay(pLevel, pTotalInvasions);
+		if (this.spawnDelay > 0) {
+			--this.spawnDelay;
+			return;
+		}
+		//Get Mobs
+		if (pPlayers.length == 0) return;
+		final ServerPlayer player = pPlayers[pLevel.getRandom().nextInt(pPlayers.length)];
+		final ChunkPos chunkPos = this.getSpawnChunk(pLevel, player);
+		if (chunkPos == null || !pLevel.isLoaded(chunkPos.getWorldPosition())) return;
+		final List<InvasionSpawnerData> mobs = this.getMobSpawnList(pLevel, chunkPos, player);
+		if (mobs.isEmpty()) return;
+		//Spawn Mob Cluster (Different Mobs)
+		boolean flag1 = false;
+		final int clusterSize = pLevel.getRandom().nextInt(this.getSeverityInfo().getClusterSize()) + 1;
+		for (int cluster = 0; cluster < clusterSize && this.invasionMobs.size() < this.mobCap; ++cluster) {
+			//Spawn Mob Group (Same Mob)
+			final InvasionSpawnerData spawners = mobs.get(pLevel.getRandom().nextInt(mobs.size()));
+			final int groupSize = pLevel.getRandom().nextInt(spawners.maxCount - spawners.minCount + 1) + spawners.minCount;
+			final boolean isModified = this.getSeverityInfo().getEntityNBTTags() != null || spawners.nbtTags != null;
+			final CompoundTag compoundTag = this.nextSpawnData.getEntityToSpawn();
+			compoundTag.putString("id", BuiltInRegistries.ENTITY_TYPE.getKey(spawners.type).toString());
+			final Optional<EntityType<?>> optional = BuiltInRegistries.ENTITY_TYPE.get(Identifier.parse(compoundTag.getStringOr("id","minecraft:pig"))).map(Holder::value);
+			if (!optional.isPresent()) {
+				this.delay(pLevel, pTotalInvasions);
+				return;
+			}
+			for (int count = 0; count < groupSize && this.invasionMobs.size() < this.mobCap; ++count) {
+				//Spawn Entity
+				final BlockPos spawnPos = this.getMobSpawnPos(pLevel, chunkPos, player, spawners.type, compoundTag);
+				if (this.isValidSpawn(pLevel, optional.get(), spawnPos, spawners)) {
+					final Entity entity = EntityType.loadEntityRecursive(compoundTag, pLevel, new net.minecraft.world.entity.EntitySpawnRequest(EntitySpawnReason.EVENT,false), e -> {
+						e.snapTo(spawnPos.getX(), spawnPos.getY(), spawnPos.getZ(), e.getYRot(), e.getXRot());
+						return e;
+					});
+					if (entity == null || entity.isInWall()) {
+						this.delay(pLevel, pTotalInvasions);
+						return;
+					}
+					entity.snapTo(entity.getX(), entity.getY(), entity.getZ(), pLevel.getRandom().nextFloat() * 360.0F, 0.0F);
+					if (isModified) {
+						final CompoundTag modifiedTag = spawners.parseNBT(this.getSeverityInfo().getEntityNBTTags());
+						if (modifiedTag == null) continue;
+                        try (var reporter = new net.minecraft.util.ProblemReporter.ScopedCollector(com.mojang.logging.LogUtils.getLogger())) {
+                            var output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(reporter,pLevel.registryAccess());
+                            entity.saveWithoutId(output);
+                            entity.load(net.minecraft.world.level.storage.TagValueInput.create(reporter,pLevel.registryAccess(),output.buildResult().merge(modifiedTag)));
+                        }
+						if (modifiedTag.getList("Passengers").isPresent()) {
+							final ListTag listTag = modifiedTag.getListOrEmpty("Passengers");
+							for (int i = 0; i < listTag.size(); ++i) {
+								final Entity passenger = EntityType.loadEntityRecursive(listTag.getCompoundOrEmpty(i), pLevel, new net.minecraft.world.entity.EntitySpawnRequest(EntitySpawnReason.EVENT,false), e -> {
+									e.snapTo(spawnPos.getX(), spawnPos.getY(), spawnPos.getZ(), e.getYRot(), e.getXRot());
+									return e;
+								});
+								if (passenger != null) passenger.startRiding(entity, true, false);
+							}
+						}
+					}
+					if (entity instanceof Mob mob) {
+						if (!EventHooks.checkSpawnPosition(mob, pLevel, EntitySpawnReason.EVENT)) continue;
+						if (compoundTag.size() == 1 && compoundTag.getString("id").isPresent())
+							this.spawnInvasionMob(pLevel, mob, spawners.ignoreSpawnRules, spawners.forceDespawn || PSGameRules.MOBS_DIE_AT_END_OF_INVASIONS.get(pLevel), spawners.persistentTags);
+					}
+					if (!pLevel.tryAddFreshEntityWithPassengers(entity)) {
+						this.delay(pLevel, pTotalInvasions);
+						return;
+					}
+					flag1 = true;
+				}
+			}
+		}
+		if (flag1) this.delay(pLevel, pTotalInvasions);
+		return;
+	}
+
+	private final boolean isValidSpawn(final ServerLevel pLevel, final EntityType<?> pEntityType, final BlockPos pPos, final InvasionSpawnerData pSpawners) {
+		if (pSpawners.acceptableBiomes.length == 0) return this.isValidLocation(pLevel, pEntityType, pPos, pSpawners.ignoreSpawnRules);
+		final Identifier biomeLoc = pLevel.getBiome(pPos).getKey().identifier();
+		for (final Identifier loc : pSpawners.acceptableBiomes) {
+			if (loc.equals(biomeLoc)) return this.isValidLocation(pLevel, pEntityType, pPos, pSpawners.ignoreSpawnRules);
+		}
+		return false;
+	}
+
+	private final boolean isValidLocation(final ServerLevel pLevel, final EntityType<?> pEntityType, final BlockPos pPos, final boolean pIgnoreSpawnRules) {
+		final boolean flag = pPos != null && SpawnPlacements.getPlacementType(pEntityType).isSpawnPositionOk(pLevel, pPos, pEntityType) && checkDefaultSpawnRules(pLevel, pEntityType, pPos);
+		return pIgnoreSpawnRules ? flag : flag && SpawnPlacements.checkSpawnRules(pEntityType, pLevel, EntitySpawnReason.EVENT, pPos, pLevel.getRandom());
+	}
+
+	private final boolean checkDefaultSpawnRules(final ServerLevel pLevel, final EntityType<?> pEntityType, final BlockPos pPos) {
+		final BlockPos below = pPos.below();
+		return Monster.isDarkEnoughToSpawn(pLevel, pPos, pLevel.getRandom()) && pLevel.getBlockState(below).isValidSpawn(pLevel, below, pEntityType);
+	}
+
+	private final void spawnAdditionalEntity(final BlockPos pPos, final ServerLevel pLevel, final EntityType<?> pEntityType) {
+		if (!Level.isInSpawnableBounds(pPos)) return;
+		final CompoundTag compoundTag = new CompoundTag();
+		compoundTag.putString("id", BuiltInRegistries.ENTITY_TYPE.getKey(pEntityType).toString());
+		final Entity entity = EntityType.loadEntityRecursive(compoundTag, pLevel, new net.minecraft.world.entity.EntitySpawnRequest(EntitySpawnReason.EVENT,false), e -> {
+			e.snapTo(pPos.getX(), pPos.getY(), pPos.getZ(), e.getYRot(), e.getXRot());
+			return e;
+		});
+		if (entity == null) return;
+		entity.getPersistentData().putBoolean(ANTI_GRIEF, false);
+		if (entity instanceof Mob mob)
+			EventHooks.finalizeMobSpawn(mob, pLevel, pLevel.getCurrentDifficultyAt(entity.blockPosition()), EntitySpawnReason.EVENT, null);
+		pLevel.tryAddFreshEntityWithPassengers(entity);
+	}
+
+	private final void spawnInvasionMob(final ServerLevel pLevel, final Mob pMob, final boolean pIgnoreSpawnRules, final boolean pForceDespawn, final MobTagData[] pPersistentTags) {
+		boolean hyperCharged = PSGameRules.HYPER_CHARGE.get(pLevel) && !PSConfigValues.common.hyperChargeBlacklist.contains(BuiltInRegistries.ENTITY_TYPE.getKey(pMob.getType()).toString()) && (this.difficulty.isHyper() || pLevel.getRandom().nextDouble() < PSConfigValues.common.hyperChargeChance * (double)(this.severity + 1)/this.invasionType.getMaxSeverity());
+		final CompoundTag persistentData = pMob.getPersistentData();
+		persistentData.putInt(INVASION_MOB, this.toExtendedString().hashCode());
+		persistentData.putBoolean(ANTI_GRIEF, pIgnoreSpawnRules);
+		int[] despawn = new int[pForceDespawn ? 6 : 4];
+        if (pForceDespawn) despawn[5] = 100 + pLevel.getRandom().nextInt(101);
+        persistentData.putIntArray(DESPAWN_LOGIC,despawn);
+		if (pMob instanceof PSInvasionMob invasionMob && hyperCharged) {
+			final int charge = this.difficulty.getHyperCharge(pLevel, this.invasionType.getTier(), this.isNatural);
+			invasionMob.psSetHyperCharge(charge);
+			for (final Entity entity : pMob.getPassengers()) {
+				if (entity instanceof PSInvasionMob passenger) 
+					passenger.psSetHyperCharge(charge);
+				final CompoundTag passengerData = entity.getPersistentData();
+				passengerData.putInt(INVASION_MOB, this.toExtendedString().hashCode());
+				passengerData.putBoolean(ANTI_GRIEF, pIgnoreSpawnRules);
+				passengerData.putIntArray(DESPAWN_LOGIC, new int[pForceDespawn ? 6 : 4]);
+				this.invasionMobs.add(new MobInfo(entity.getUUID(), false));
+			}
+		} else {
+			for (final Entity entity : pMob.getPassengers())  {
+				final CompoundTag passengerData = entity.getPersistentData();
+				passengerData.putInt(INVASION_MOB, this.toExtendedString().hashCode());
+				passengerData.putBoolean(ANTI_GRIEF, pIgnoreSpawnRules);
+				passengerData.putIntArray(DESPAWN_LOGIC, new int[pForceDespawn ? 6 : 4]);
+				this.invasionMobs.add(new MobInfo(entity.getUUID(), false));
+			}
+		}
+		for (final MobTagData tag : pPersistentTags) 
+			tag.addTagToMob(persistentData);
+		EventHooks.finalizeMobSpawn(pMob, pLevel, pLevel.getCurrentDifficultyAt(pMob.blockPosition()), EntitySpawnReason.EVENT, null);
+		this.invasionMobs.add(new MobInfo(pMob.getUUID(), false));
+		PSPackets.sendToClientsIn(new InvasionMobParticlesPacket(this.difficulty, pMob.position()), pLevel);
+		pMob.spawnAnim();
+	}
+
+	private final void delay(final ServerLevel pLevel, final int pTotalInvasions) {
+		this.spawnDelay = PSGameRules.ZERO_TICK_DELAY.get(pLevel) ? 0 : this.getSeverityInfo().getTickDelay()/pTotalInvasions;
+		this.spawnPotentials.getRandom(pLevel.getRandom()).ifPresent(entry -> {
+			this.nextSpawnData = entry;
+		});
+	}
+
+	private final ArrayList<InvasionSpawnerData> getMobSpawnList(final ServerLevel pLevel, final ChunkPos pChunkPos, final ServerPlayer pPlayer) {
+		final ArrayList<InvasionSpawnerData> originalList = new ArrayList<>(this.getSeverityInfo().getMobSpawnList() == null ? List.of() : List.of(this.getSeverityInfo().getMobSpawnList()));
+		switch (this.invasionType.getSpawningSystem()) {
+		case DEFAULT: break;
+		case BIOME_BOOSTED: {
+			final BlockPos biomePos = this.getEntitySpawnPos(pLevel, pChunkPos, pPlayer, null, false);
+			originalList.addAll(this.getBiomeSpawnList(pLevel,biomePos));
+			break;
+		}
+		case BIOME_MIXED: {
+			originalList.addAll(this.getMixedSpawnList(pLevel));
+			break;
+		}
+		}
+		final ArrayList<InvasionSpawnerData> newList = new ArrayList<>();
+		if (!originalList.isEmpty()) {
+			for (final InvasionSpawnerData spawners : originalList) {
+				for (int w = 0, tw = spawners.getWeight(); w < tw; ++w)
+					newList.add(spawners);
+			}
+		}
+		return newList;
+	}
+
+	private final ArrayList<InvasionSpawnerData> getBiomeSpawnList(final ServerLevel level, final BlockPos pPos) {
+		final ArrayList<InvasionSpawnerData> spawners = InvasionSpawnerData.convertSpawners(level.environmentAttributes().getValue(net.minecraft.world.attribute.EnvironmentAttributes.NATURAL_MOB_SPAWNS,pPos).getMobsToSpawn(MobCategory.MONSTER).unwrap());
+		spawners.removeIf(spawner -> {
+			final Identifier name = BuiltInRegistries.ENTITY_TYPE.getKey(spawner.type);
+			return PSConfigValues.common.modBiomeBoostedBlacklist.contains(name.getNamespace()) || PSConfigValues.common.mobBiomeBoostedBlacklist.contains(name.toString());
+		});
+		return spawners;
+	}
+
+	private final ArrayList<InvasionSpawnerData> getMixedSpawnList(final ServerLevel pLevel) {
+		final var stems = pLevel.registryAccess().lookupOrThrow(Registries.LEVEL_STEM).listElements().toList();
+        if (stems.isEmpty()) return new ArrayList<>();
+        final Optional<Holder.Reference<LevelStem>> optional = Optional.of(stems.get(pLevel.getRandom().nextInt(stems.size())));
+		if (!optional.isPresent() || optional.isEmpty()) return new ArrayList<>();
+		final ArrayList<Holder<Biome>> biomes = new ArrayList<>(optional.get().value().generator().getBiomeSource().possibleBiomes());
+		final ArrayList<InvasionSpawnerData> spawners = biomes.size() > 0 ? InvasionSpawnerData.convertSpawners(biomes.get(pLevel.getRandom().nextInt(biomes.size())).value().getAttributes().applyModifier(net.minecraft.world.attribute.EnvironmentAttributes.NATURAL_MOB_SPAWNS,net.minecraft.world.level.biome.MobSpawnSettings.EMPTY).getMobsToSpawn(MobCategory.MONSTER).unwrap()) : new ArrayList<>();
+		spawners.removeIf(spawner -> {
+			final Identifier name = BuiltInRegistries.ENTITY_TYPE.getKey(spawner.type);
+			return PSConfigValues.common.modBiomeBoostedBlacklist.contains(name.getNamespace()) || PSConfigValues.common.mobBiomeBoostedBlacklist.contains(name.toString());
+		});
+		return spawners;
+	}
+
+	private final ChunkPos getSpawnChunk(final ServerLevel pLevel, final ServerPlayer pPlayer) {
+		final ChunkPos chunkPos = pLevel.getChunk(pPlayer.blockPosition()).getPos();
+		final int radius = Mth.clamp(PSGameRules.MOB_SPAWN_CHUNK_RADIUS.get(pLevel),1,8);
+		final int offset = 1 + radius * 2;
+		final int chunkX = chunkPos.x() - radius + pLevel.getRandom().nextInt(offset);
+		final int chunkZ = chunkPos.z() - radius + pLevel.getRandom().nextInt(offset);
+		final boolean flag = chunkPos.x() == chunkX && chunkPos.z() == chunkZ;
+		final ChunkPos chunkPos1 = new ChunkPos(flag ? chunkX + this.getChunkOffset(pLevel) : chunkX, flag ? chunkZ + this.getChunkOffset(pLevel) : chunkZ);
+		return chunkPos1;
+	}
+
+	private final int getChunkOffset(final ServerLevel pLevel) {
+		final int offSet = pLevel.getRandom().nextInt(8) + 1;
+		return pLevel.getRandom().nextBoolean() ? offSet : -offSet;
+	}
+
+	private final Path testPath(final PathNavigation pNav, final Player pPlayer, final int pAccuracy, final BlockPos pPos) {
+		final BlockPos playerPos = pPlayer.blockPosition();
+		final float range = 0; //(float)pPos.distSqr(playerPos); This is backup method if this fails
+		if (pNav.mob.getY() < (double)pNav.level.getMinY()) {
+			return null;
+		} else if (pNav.path != null && !pNav.path.isDone() && playerPos.equals(pNav.targetPos)) {
+			return null;
+		} else {
+			if (pNav.pathFinder == null) return null;
+			net.minecraft.util.profiling.Profiler.get().push("pathfind");
+			final BlockPos blockPos = pNav.mob.blockPosition().above();
+			final int i = (int)(range + 16.0F);
+			final PathNavigationRegion pathNavigationRegion = new PathNavigationRegion(pNav.level, blockPos.offset(-i, -i, -i), blockPos.offset(i, i, i));
+			final Path path = pNav.pathFinder.findPath(pathNavigationRegion, pNav.mob, ImmutableSet.of(playerPos), range, pAccuracy, pNav.maxVisitedNodesMultiplier);
+			net.minecraft.util.profiling.Profiler.get().pop();
+			if (path != null && path.getTarget() != null) {
+				pNav.targetPos = path.getTarget();
+				pNav.reachRange = pAccuracy;
+				pNav.resetStuckTimeout();
+			}
+			return path;
+		}
+	}
+
+	private final BlockPos getMobSpawnPos(final ServerLevel pLevel, final ChunkPos pChunkPos, final ServerPlayer pPlayer, final EntityType<?> pEntityType, final CompoundTag pCompoundTag) {
+		final int x = pChunkPos.getMinBlockX() + pLevel.getRandom().nextInt(16);
+		final int z = pChunkPos.getMinBlockZ() + pLevel.getRandom().nextInt(16);
+		final ArrayList<Integer> posList = new ArrayList<>(); //Smart Spawning
+		final ArrayList<Integer> posList2 = new ArrayList<>(); //Dumb Spawning
+		final int radius = Mth.square(Mth.clamp(PSGameRules.NO_SPAWN_MOBS_BLOCK_RADIUS.get(pLevel),1,256));
+		for (int y = pPlayer.getBlockY() - 96, yMax = pPlayer.getBlockY() + 97; y < yMax; ++y) {
+			if (pPlayer.distanceToSqr(x, y, z) < radius) continue;
+			final BlockPos pos = new BlockPos(x, y, z);
+			if (pEntityType == null ? !pLevel.getBlockState(pos).isAir() && pLevel.getBlockState(pos.above()).isPathfindable(PathComputationType.AIR) : SpawnPlacements.getPlacementType(pEntityType).isSpawnPositionOk(pLevel, pos, pEntityType)) {
+				posList2.add(y);
+				if (pCompoundTag == null) { posList.add(y); continue; }
+				final Entity entity = EntityType.loadEntityRecursive(pCompoundTag, pLevel, new net.minecraft.world.entity.EntitySpawnRequest(EntitySpawnReason.EVENT,false), e -> {
+					e.snapTo(x, pos.getY(), z, e.getYRot(), e.getXRot());
+					return e;
+				});
+				if (entity == null) {
+					continue;
+				} else if (entity instanceof Mob mob) {
+					final PathNavigation navigation = mob.getNavigation();
+					if (navigation != null && this.testPath(navigation, pPlayer, 0, pos) != null)
+						posList.add(y);
+				}
+				entity.discard();
+			}
+		}
+		return new BlockPos(x, SpawnPosChart.getYInRange2(posList, posList2, pPlayer.getBlockY(), pLevel.getRandom().nextFloat()), z);
+	}
+
+	private final BlockPos getMobRelocatePos(final ServerLevel pLevel, final ChunkPos pChunkPos, final ServerPlayer pPlayer, final Entity pEntity) {
+		final int x = pChunkPos.getMinBlockX() + pLevel.getRandom().nextInt(16);
+		final int z = pChunkPos.getMinBlockZ() + pLevel.getRandom().nextInt(16);
+		final ArrayList<Integer> posList = new ArrayList<>(); //Smart Spawning
+		final ArrayList<Integer> posList2 = new ArrayList<>(); //Dumb Spawning
+		final int radius = Mth.square(Mth.clamp(PSGameRules.NO_SPAWN_MOBS_BLOCK_RADIUS.get(pLevel),1,256));
+		for (int y = pPlayer.getBlockY() - 96, yMax = pPlayer.getBlockY() + 97; y < yMax; ++y) {
+			if (pPlayer.distanceToSqr(x, y, z) < radius) continue;
+			final BlockPos pos = new BlockPos(x, y, z);
+			if (pEntity == null ? !pLevel.getBlockState(pos).isAir() && pLevel.getBlockState(pos.above()).isPathfindable(PathComputationType.AIR) : SpawnPlacements.getPlacementType(pEntity.getType()).isSpawnPositionOk(pLevel, pos, pEntity.getType())) {
+				posList2.add(y);
+				if (pEntity instanceof Mob mob) {
+					final PathNavigation navigation = mob.getNavigation();
+					if (navigation != null && this.testPath(navigation, pPlayer, 0, pos) != null)
+						posList.add(y);
+				}
+			}
+		}
+		return new BlockPos(x, SpawnPosChart.getYInRange2(posList, posList2, pPlayer.getBlockY(), pLevel.getRandom().nextFloat()), z);
+	}
+
+	private final BlockPos getEntitySpawnPos(final ServerLevel pLevel, final ChunkPos pChunkPos, final ServerPlayer pPlayer, final EntityType<?> pEntityType, final boolean pIsSurface) {
+		final int x = pChunkPos.getMinBlockX() + pLevel.getRandom().nextInt(16);
+		final int z = pChunkPos.getMinBlockZ() + pLevel.getRandom().nextInt(16);
+		if (pIsSurface) return new BlockPos(x, pLevel.getHeight(Heightmap.Types.WORLD_SURFACE, x, z), z);
+		final ArrayList<Integer> posList = new ArrayList<>(); //Dumb Spawning
+		for (int y = pPlayer.getBlockY() - 96, yMax = pPlayer.getBlockY() + 97; y < yMax; ++y) {
+			final BlockPos pos = new BlockPos(x, y, z);
+			if (pEntityType == null ? !pLevel.getBlockState(pos).isAir() && pLevel.getBlockState(pos.above()).isPathfindable(PathComputationType.AIR) : SpawnPlacements.getPlacementType(pEntityType).isSpawnPositionOk(pLevel, pos, pEntityType))
+				posList.add(y);
+		}
+		return new BlockPos(x, SpawnPosChart.getYInRange(posList, pPlayer.getBlockY(), pLevel.getRandom().nextFloat()), z);
+	}
+
+	public static final Invasion load(final ServerLevel pLevel, final InvasionDifficulty pDifficulty, final CompoundTag pNbt) {
+		if (!PSReloadListeners.getInvasionTypeManager().verifyInvasion(pNbt.getStringOr("InvasionType",""))) return null;
+		final InvasionType invasionType = PSReloadListeners.getInvasionTypeManager().getInvasionType(Identifier.tryParse(pNbt.getStringOr("InvasionType","")));
+		if (invasionType == null || invasionType.getMaxSeverity() < 1) return null;
+        final Invasion invasion = new Invasion(pLevel, invasionType, Mth.clamp(pNbt.getIntOr("Severity",0),0,invasionType.getMaxSeverity()-1), pNbt.getBooleanOr("IsPrimary",false), pNbt.getBooleanOr("IsNatural",false), pNbt.getLongOr("StartTime",0L), pNbt.getIntOr("Index",0), pDifficulty);
+		invasion.spawnDelay = pNbt.getIntOr("SpawnDelay",0);
+        invasion.mobsKilledByPlayer = pNbt.getIntOr("MobsKilledByPlayer",0);
+		return invasion;
+	}
+
+	public final CompoundTag save() {
+		final CompoundTag nbt = new CompoundTag();
+		nbt.putString("InvasionType", this.invasionType.toString());
+		nbt.putInt("Severity", this.severity);
+		nbt.putBoolean("IsPrimary", this.isPrimary);
+		nbt.putBoolean("IsNatural", this.isNatural);
+		nbt.putLong("StartTime", this.startTime);
+		nbt.putInt("Index", this.index);
+		nbt.putInt("SpawnDelay", this.spawnDelay);
+        nbt.putInt("MobsKilledByPlayer",this.mobsKilledByPlayer);
+		return nbt;
+	}
+
+	@Override
+	public final String toString() {
+		return this.invasionType.toString();
+	}
+
+	@Override
+	public final boolean equals(final Object pObj) {
+		if (pObj instanceof Invasion inv)
+			return this.toExtendedString().equals(inv.toExtendedString());
+		return false;
+	}
+
+	public final String toExtendedString() {
+		return "InvasionType: " + this.invasionType.toString() + ", Severity: " + this.severity + ", IsPrimary: " + this.isPrimary + ", IsNatural: " + this.isNatural + ", StartTime: " + this.startTime + ", Index: " + this.index;
+	}
+
+	private static final class MobInfo {
+		private UUID uuid;
+		private boolean relocate;
+
+		private MobInfo(final UUID pUUID, final Boolean pRelocate) {
+			this.uuid = pUUID;
+			this.relocate = pRelocate;
+		}
+	}
+
+	public static final class BuildInfo implements InvasionTypeHolder {
+		private final InvasionType invasionType;
+		private final int severity;
+		private final boolean isPrimary;
+
+		public BuildInfo(final InvasionType pInvasionType, final int pSeverity, final boolean pIsPrimary) {
+			this.invasionType = pInvasionType;
+			this.severity = pSeverity;
+			this.isPrimary = pIsPrimary;
+		}
+
+		@Override
+		public final InvasionType getType() {
+			return this.invasionType;
+		}
+
+		public final boolean isPrimary() {
+			return this.isPrimary;
+		}
+
+		public static final BuildInfo load(final ServerLevel pLevel, final CompoundTag pNbt) {
+			final InvasionType invasionType = PSReloadListeners.getInvasionTypeManager().getInvasionType(Identifier.tryParse(pNbt.getStringOr("InvasionType","")));
+			final int severity = pNbt.getIntOr("Severity",0);
+			final boolean isPrimary = pNbt.getBooleanOr("IsPrimary",false);
+			return new BuildInfo(invasionType, severity, isPrimary);
+		}
+
+		public final CompoundTag save() {
+			final CompoundTag nbt = new CompoundTag();
+			nbt.putString("InvasionType", this.invasionType.toString());
+			nbt.putInt("Severity", this.severity);
+			nbt.putBoolean("IsPrimary", this.isPrimary);
+			return nbt;
+		}
+
+		public final Invasion build(final ServerLevel pLevel, final InvasionDifficulty pDifficulty, final int pIndex) {
+			return new Invasion(pLevel, this.invasionType, this.severity, this.isPrimary, false, pLevel.getOverworldClockTime(), pIndex, pDifficulty);
+		}
+	}
+}

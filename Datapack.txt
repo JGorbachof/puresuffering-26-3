@@ -1,0 +1,222 @@
+Pure Suffering Data Pack Guide
+------------------------------
+
+Step1: Create your datapack.
+- Here's a tutorial https://minecraft.fandom.com/wiki/Tutorials/Creating_a_data_pack
+
+Step2: In your data namespace folder, create a folder called "invasion_types"
+- Minecraft's namespace folder is named "minecraft"
+- Pure Suffering's namespace folder is named "puresuffering"
+
+Step3: Create a json file for your invasion (all lower case, replace spaces with underscores)
+- Ex "phantom_zone, example_name, pain_and_suffering" 
+
+Step4: Setup your invasion json file.
+- The Invasion Values and what they do are listed below.
+
+--------------------------------------------------------
+
+All Invasion Values:
+OverridesExisting: (Optional - Boolean)
+- Used for datapacks to override an existing invasion with custom mobs, visual effects, etc...
+DefaultName: (Optional - String)
+- Used for datapacks to set a name for the invasion without the need of a custom resourcepack to have an en_us file.
+Rarity: (Integer 0+)
+- How rare your invasion is, higher numbers are more rare.
+Tier: (Integer 0+)
+- The Tier of your invasion, increased numbers occurring after so many difficulty bumps.
+GameStages: (Optional - String Array - 1.20.1 Only)
+- GameStages required to unlock the invasion.
+StopConversions: (Optional - Boolean)
+- Will determine if invasion mobs will be unable to convert into another hostile mob.
+InvasionTime: (String)
+- When your invasion occurs.
+- "DAY" The invasion occurs only in the day.
+- "NIGHT" The invasions occurs only at night.
+- "BOTH" The invasions occurs in the day and at night.
+InvasionPriority: (Optional - String)
+- The priority of the invasion when the event occurs.
+- "SECONDARY_ONLY" The invasion can only serve as a support to another invasion.
+- "PRIMARY_ONLY" The invasion can only serve as the main invasion.
+- "BOTH" By default, the invasion can serve as either the main invasion or a support invasion.
+SpawningSystem: (Optional - String)
+- The spawning method used by this invasion.
+- "DEFAULT" The invasion uses the mob list provided to choose mobs to spawn.
+- "BIOME_BOOSTED" The invasion uses the biome's monster spawn list to choose mobs to spawn.
+- "BIOME_MIXED" The invasion uses every biome monster spawn list to choose mobs to spawn.
+TimeModifier: (Optional - String)
+- How your invasion changes the what day/night invasions can be chosen.
+- This is preferably only changed as a primary invasion, but is possible to experiment.
+- "NONE" By default, this invasion does not change anything.
+- "DAY_TO_NIGHT" This invasion is a day time invasion that makes night invasions occur with it.
+- "NIGHT_TO_DAY" This invasion is a night time invasion that makes day invasions occur with it.
+TimeChangeability: (Optional - String)
+- How this invasion is affected by a previous invasion's time modifier.
+- Typically used when this invasion is chosen as a secondary invasion.
+- "DEFAULT" The invasion is affected normally.
+- "ONLY_NIGHT" The invasion cannot be chosen when a day invasion makes night invasions occur.
+- "ONLY_DAY" The invasion cannot be chosen when a night invasion makes day invasions occur.
+WeatherType: (Optional - String)
+- "DEFAULT" Weather is unchanged.
+- "CLEAR" Weather is forced to be clear during the invasion.
+- "RAIN" Weather is forced to be raining during the invasion.
+- "THUNDER" Weather is forced to be thundering during the invasion.
+- "UNSTABLE" Weather is constantly changing during the invasion.
+DayNightCycleRequirement: (Optional - String)
+- Used to determine if the invasion requires a day/night cycle, none at all, or is uneffected.
+- "NONE" By default, works with or without a day/night cycle.
+- "NEEDS_CYCLE" Requires a day/night cycle.
+- "NO_CYCLE" Requires the absense of a day/night cycle.
+SeverityInfo: (List of info for each severity of this invasion, every entry is 1 more severity) {
+    SkyRenderInfo: (Skybox attributes changed by this invasion) {
+        FogRenderInfo: (Optional - Fog attributes changed by this invasion) {
+            RGBOffset: (Optional - Float Array)
+            - Red color offset to the default fog color (Float -1.0 - 1.0).
+            - Green color offset to the default fog color (Float -1.0 - 1.0).
+            - Blue color offset to the default fog color (Float -1.0 - 1.0).
+            FlickerRGBOffset: (Optional - Float Array)
+            - Red color offset to the default fog color (Float -1.0 - 1.0).
+            - Green color offset to the default fog color (Float -1.0 - 1.0).
+            - Blue color offset to the default fog color (Float -1.0 - 1.0).
+            - MinDelay between flickers (Int 0+).
+            - MaxDelay between flickers (Int 0+).
+        }
+        SunMoonAlpha: (Optional - Float)
+        - Alpha value for the sun & moon.
+        SunTexture: (Optional - ResourceLocation-String)
+        - The texture used for the sun if the invasion occurs in the day.
+        MoonTexture: (Optional - ResourceLocation-String)
+        - The texture used for the moon if the invasion occurs at night.
+        FixedSkyTexture: (Optional - ResourceLocation-String)
+        - The texture used for the end sky when the invasion occurs (May not work in other dimensions, but nothing I can do to fix it).
+        FlickerVisibility: (Optional - Float Array (Sun & Moon Visibility))
+        - Min Visibility of the flicker (Float 0.0 - 1.0).
+        - Max Visibility of the flicker (Float 0.0 - 1.0).
+        - MinDelay between flickers (Int 0+).
+        - MaxDelay between flickers (Int 0+).
+        FlickerBrightness: (Optional - Float Array)
+        - Min Brightness of the flicker (Float 0.0 - 1.0).
+        - Max Brightness of the flicker (Float 0.0 - 1.0).
+        - MinDelay between flickers (Int 0+).
+        - MaxDelay between flickers (Int 0+).
+        FlickerRGBOffset: (Optional - Float Array)
+        - Red color offset to the default fog color (Float -1.0 - 1.0).
+        - Green color offset to the default fog color (Float -1.0 - 1.0).
+        - Blue color offset to the default fog color (Float -1.0 - 1.0).
+        - MinDelay between flickers (Int 0+).
+        - MaxDelay between flickers (Int 0+).
+        WeatherVisibility: (Optional - Float 0.0 - 1.0)
+        - How visible the sun/moon is in rain/thunder.
+        - Higher values are more visible.
+        Brightness: (Optional - Float 0.0 - 1.0)
+        - How bright the world is when your invasion occurs.
+        - 1.0 for default daytime, 0.2 for default nighttime.
+        - lower numbers for lower brightness.
+        LightLevel: (Integer 0 - 15)
+    	- Light level of the world when the invasion occurs.
+    	- The values are inverted so 15 will result in a light level of 0.
+        RGBOffset: (Optional - Float Array)
+        - Red color offset to the default fog color (Float -1.0 - 1.0).
+        - Green color offset to the default fog color (Float -1.0 - 1.0).
+        - Blue color offset to the default fog color (Float -1.0 - 1.0).
+    }
+    StartCommands: { (Optional - StringList)
+        - Commands that execute at the start of an invasion.
+        - Example "/time add 1000".
+    }
+    EndCommands: { (Optional - StringList)
+        - Commands that execute at the end of an invasion.
+        - Example "/time add 1000".
+    }
+    EntityNBTTags: (Optional - String)
+    - Format like in the /summon command.
+    - Overrides default nbt data for invasion mobs.
+    - Global value that applies to all mobs spawned by the invasion.
+    - Example "{NoAI:1}" would disable ai for all mobs by default.
+    MobSpawnList: (List of mobs spawned by the invasion) {
+        EntityType: (ResourceLocation-String)
+        - ID of the mob for this spawn entry
+        Weight: (Integer)
+        - How common the mob is spawned.
+        - Bigger number is spawned more.
+        MinCount: (Integer)
+        - Least amount of mobs that can spawn in a group.
+        MaxCount: (Integer)
+        - Most amount of mobs that can spawn in a group.
+        IgnoreSpawnRules: (Optional - Boolean)
+        - If true, this entity will use default mob spawning rules instead of it's specialized rules.
+        ForceDespawn: (Optional - Boolean)
+        - If true. this entity will be forced to despawn at the end of an invasion.
+        AcceptableBiomes: (Optional - List of biome ids or biome tags, use a '#' to specify a biome tag)
+        - What biomes this mob can spawn in when this invasion occurs, keeping this empty will result in all biomes being acceptable.
+        - Example "minecraft:plains" to specify a biome or "#minecraft:is_overworld" to specify a tag
+        NBTTags: (Optional - String)
+        - Format like in the /summon command.
+        - Overrides default nbt data for invasion mobs and nbt data specified by the "EntityNBTTags" value.
+        - Specific value that applies to this entity type for the invasion.
+        - Example "{NoAI:1}" would disable ai for all mobs of this type.
+        PersistentTags: { (Optional - NBTList)
+            - This applies to the mob's persistent data not vanilla entity data.
+            - Can override existing values or create new ones.
+            Id: (Integer)
+            - Type number depending on type of tag
+            - BOOLEAN = 0
+            - BYTE = 1
+            - SHORT = 2
+            - INT = 3
+            - LONG = 4
+            - FLOAT = 5
+            - DOUBLE = 6
+            - STRING = 7
+            - BYTE_ARRAY = 8
+            - INT_ARRAY = 9
+            - LONG_ARRAY = 10
+            Name: (String)
+            - Name of the tag
+            Value: (Depends on Id)
+            - Type value associated with the tag's type/id number
+        }
+    }
+    AdditionalEntitiesList: (List of Entities to spawn that aren't mobs) {
+        EntityType: (ResourceLocation-String)
+        - ID of the entity that can spawn
+        Chance: (Integer)
+        - How common the mob is spawned.
+        - Bigger number is spawned more.
+        MinCount: (Integer)
+        - Least amount of entities that can spawn in a group.
+        MaxCount: (Integer)
+        - Most amount of entities that can spawn in a group.
+        IsSurfaceSpawn: (Optional - Boolean)
+        - Determines if this entity only spawns on the surface.
+    }
+    MobCapPercentage: (Float 0.0 - 1.0)
+    - What percent of these mobs can spawn of the mob cap limit.
+    - Such as 100 times 0.8 is 80% of the total mobs possible.
+    - Can go higher, but is unrecommended due to performance limitations.
+    FixedMobCap: (Integer 0+)
+    - A fixed number for the mob cap limit.
+    - Recommended to use on Invasions that spawn a few powerful mobs instead of a horde of mobs.
+    - MobCapPercentage will apply to this value instead of the config value.
+    ForceNoSleep: (Optional - Boolean)
+    - Should this invasion force players to not be able to sleep as it occurs?
+    TickDelay: (Integer 0+)
+    - The delay in ticks for when a mob should spawn.
+    - Negative tick delay will prevent the invasion from ticking.
+    ClusterSize: (Optional - Integer 1+)
+    - The amount of mobs spawn in a cluster per chunk picked by the invasion.
+    - Defaults to 1.
+    MobKillLimit: (Optional - Integer 0+)
+    - The amount of mobs a player needs to kill before the invasion is ended.
+    - By setting it to 0 it will default to turning the feature off.
+}
+Dimensions: (List of Strings)
+- The Ids of every dimension this invasion can occur in.
+
+-----------------------------------------------------------------
+
+Additional Tools to help...
+
+Pure Suffering Mutant Monsters Datapack: https://github.com/TheAGamePlayer/PSMM-Datapack
+
+Example Pure Suffering Invasion Jsons: https://github.com/TheAGamePlayer/The-Pure-Suffering-Mod/tree/main/src/main/resources/data/puresuffering/invasion_types
